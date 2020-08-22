@@ -32,3 +32,30 @@ body {
   width: 100%;
   height:100%;
 }
+.booth .marker {
+  stroke: #1C1C1C;
+}
+.cell {
+  fill: rgba(0, 0, 0, 0);
+}
+#tip {
+  position: absolute;
+  opacity: 0;
+  text-align: center;
+  padding: 5px;
+  border-radius: 5px;
+  background-color: rgba(28, 28, 28, .75);
+  pointer-events: none;
+  color: white;
+}
+#tip p, #tip h1 {
+  margin: 0;
+  padding: 0;
+}
+#tip h1 {
+  font-size: .9rem;
+}
+#tip p {
+  font-family: "ABCSans Regular", sans-serif;
+  font-size: .8rem;
+}
