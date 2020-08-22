@@ -24,11 +24,12 @@
   <body>
     <!-- Initial page layout -->
     <div id="map"></div>
+    <div id="tip"></div>
     <script>
       // load data
       d3.json("./resources/pollingPlaces.geojson", function(error, data) {
         if (error) throw error;
-        pollingPlaces = data;
+        pollingData = data;
         // set up MapBox engine
         mapboxgl.accessToken = "pk.eyJ1IjoibmV3cy1vbjFpbmUiLCJhIjoiR3FlZFZlVSJ9._30EFE9XYhQitqf4gzRG-g";
         map = new mapboxgl.Map({
@@ -36,8 +37,8 @@
           style: "mapbox://styles/mapbox/light-v10",
           center: [149.106944, -35.323056],
           attributionControl: false,
-          minZoom: 8,
-          maxZoom: 12,
+          minZoom: 9,
+          maxZoom: 13,
           pitchWithRotate: false,
           dragRotate: false,
           touchZoomRotate: false
@@ -52,6 +53,8 @@
               showCompass: false
             }))
             .resize();
+          // tooltip
+          tip = d3.select("#tip");
           // svg layer
           container = map.getCanvasContainer();
           svg = d3.select(container)
@@ -60,17 +63,24 @@
           svgGroup = svg
             .append("g")
             .attr("id", "svgGroup");
+          // voronoi tesselation
+          voronoi = d3.voronoi()
+            .x(function(d) { return projection(d.geometry.coordinates)[0]; })
+            .y(function(d) { return projection(d.geometry.coordinates)[1]; });
+          // resize script
+          window.addEventListener("resize", windowResize);
+          windowResize();
           // map calculations
           margin = { top: 16, bottom: 16, left: 16, right: 16 };
           projection = calcProjection();
           path = d3.geoPath()
-            .pointRadius(width < 500 ? 2.5 : 5);
+            .pointRadius(width < 500 ? 6 : 9);
           // re-render SVGs upon movement
           map.on("viewreset", render)
             .on("move", render)
             .on("move", render);
           render();
-          map.fitBounds(d3.geoBounds(pollingPlaces));
+          map.fitBounds(d3.geoBounds(pollingData), { padding: margin });
         });
       });
 
@@ -79,14 +89,47 @@
         projection = calcProjection();
         path.projection(projection);
         // draw SVGs
-        d3.selectAll(".wildlife")
-          .attr("d", path);
+        booths = svgGroup
+          .selectAll(".booth")
+            .data(voronoi.polygons(pollingData.features));
+        // exiting
+        booths.exit()
+          .remove();
+        // entering
+        entering = booths
+          .enter().append("g")
+            .classed("booth", true);
+        entering.append("path")
+          .classed("marker", true)
+          .attr("d", function(d) { return !d ? null : path(d.data); })
+          .style("fill", function(d) { return !d ? null : d.data.properties.type == "static" ? "#009CBF" : "#F75F00"; });
+        entering.append("path")
+          .classed("cell", true)
+          .attr("d", function(d) { return !d ? null : d3.line()(d) + "Z"; })
+          .on("mouseover", mouseover)
+          .on("mouseout", mouseout)
+          .on("touchstart", mouseout)
+          .on("touchend", mouseover);
+        // existing
+        booths.select(".marker")
+          .attr("d", function(d) { return !d ? null : path(d.data); })
+          .style("fill", function(d) { return !d ? null : d.data.properties.type == "static" ? "#009CBF" : "#F75F00"; });
+        booths.select(".cell")
+          .attr("d", function(d) { return !d ? null : d3.line()(d) + "Z"; });
+      }
+
+      // if window is resized
+      function windowResize() {
+        width = svg.node().getBoundingClientRect().width;
+        height = svg.node().getBoundingClientRect().height;
+        margin = width < 500 ?
+          { top: 16, bottom: 16, left: 16, right: 16 } :
+          { top: 32, bottom: 32, left: 32, right: 32 };
+        voronoi.size([width, height]);
       }
 
       // recalculates D3 map projection when map moves
       function calcProjection() {
-        height = document.body.getBoundingClientRect().height;
-        width = document.body.getBoundingClientRect().width;
         center = map.getCenter();
         zoom = map.getZoom();
         scale = 256 / Math.PI * Math.pow(2, zoom);
@@ -94,6 +137,46 @@
           .center([center.lng, center.lat])
           .translate([width / 2, height / 2])
           .scale(scale);
+      }
+
+      // mouseover
+      function mouseover(d) {
+        d3.select(this.parentNode)
+          .select(".marker")
+            .style("fill", "white");
+        d3.select(this.parentNode)
+          .raise();
+        centroid = projection(this.__data__.data.geometry.coordinates);
+        tip.style("opacity", 0)
+          .style("top", "0px") // reset position to tool tip for correct sizing
+          .style("left", "0px")
+          .html("<h1>" + d.data.properties.name + "</h1>"
+              + "<p>" + d.data.properties.premises + "</p>"
+              + (d.data.properties.type == "electronic" ? "<p style='color: #FFB300;'><strong>early voting centre</strong></p>" : ""));
+        // set location of tool tip to ensure it's always inside chart
+        let tipWidth = parseFloat(tip.style("width"));
+        let tipHeight = parseFloat(tip.style("height"));
+        tip.style("top", function() {
+            return centroid[1] + tipHeight + 32 > height ?
+              (centroid[1] - tipHeight - 32) + "px":
+              (centroid[1] + 16) + "px";
+          })
+          .style("left", function() {
+            return centroid[0] + (tipWidth / 2) + 16 > width ?
+              (width - tipWidth - 16) + "px" :
+              centroid[0] - (tipWidth / 2) - 16 < 0 ?
+              "16px" :
+              (centroid[0] - (tipWidth / 2)) + "px";
+          })
+          .style("opacity", 1);
+      }
+
+      // mouseout
+      function mouseout() {
+        d3.select(this.parentNode)
+          .select(".marker")
+            .style("fill", function(d) { return !d ? null : d.data.properties.type == "static" ? "#009CBF" : "#F75F00"; });
+        tip.style("opacity", 0);
       }
     </script>
   </body>
