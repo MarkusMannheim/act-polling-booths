@@ -70,7 +70,7 @@
         x = d3.scaleTime()
           .domain([new Date("2001-01-01"), new Date("2019-12-31")]);
         y = d3.scaleLinear()
-          .domain([0, d3.max(voteData, function(d) { return d3.max([d.act, d.federal]); })]);
+          .domain([0, d3.max(voteData, function(d) { return d3.max([d.act, d.federal]); })]).nice();
         xAxis = d3.axisBottom(x)
           .tickSizeOuter(0)
           .tickPadding(8)
